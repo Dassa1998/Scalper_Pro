@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scalper Pro Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0b0e14; color: #d1d5db; font-family: ui-sans-serif, system-ui; }
+        .card { background-color: #151a23; border: 1px solid #1f2937; border-radius: 0.5rem; }
+        .btn-panic { background-color: #ef4444; color: white; font-weight: bold; }
+        .btn-start { background-color: #10b981; color: white; font-weight: bold; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-white">Scalper Pro</h1>
+            <div id="mode-badge" class="px-3 py-1 text-sm rounded-full bg-blue-900 text-blue-200">PAPER</div>
+        </div>
+
+        <!-- Main Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="card p-4">
+                <div class="text-sm text-gray-400">Balance</div>
+                <div id="stat-balance" class="text-xl font-bold text-white">$0.00</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-sm text-gray-400">Open Positions</div>
+                <div id="stat-pos" class="text-xl font-bold text-white">0</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-sm text-gray-400">Status</div>
+                <div id="stat-status" class="text-xl font-bold text-red-500">STOPPED</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-sm text-gray-400">Today's PnL</div>
+                <div class="text-xl font-bold text-green-400">$0.00</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="card p-4 flex gap-4">
+            <button onclick="startBot()" class="btn-start px-6 py-2 rounded hover:opacity-90">START ENGINE</button>
+            <button onclick="stopBot()" class="bg-gray-700 text-white px-6 py-2 rounded hover:opacity-90">PAUSE</button>
+            <button onclick="panic()" class="btn-panic px-6 py-2 rounded ml-auto hover:opacity-90">PANIC (CLOSE ALL)</button>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card p-4 h-64 overflow-y-auto font-mono text-sm" id="log-container">
+            <div class="text-gray-500">Waiting for events...</div>
+        </div>
+    </div>
+
+    <script>
+        async function startBot() {
+            await fetch('/api/start', { method: 'POST' });
+        }
+        async function stopBot() {
+            await fetch('/api/stop', { method: 'POST' });
+        }
+        async function panic() {
+            if(confirm("Are you sure you want to PANIC and close all positions?")) {
+                await fetch('/api/panic', { method: 'POST' });
+            }
+        }
+
+        // Live Updates via SSE
+        const eventSource = new EventSource('/api/stream');
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            document.getElementById('stat-balance').innerText = `$${data.balance.toFixed(2)}`;
+            document.getElementById('stat-pos').innerText = data.positions;
+            document.getElementById('stat-status').innerText = data.is_running ? 'RUNNING' : 'STOPPED';
+            document.getElementById('stat-status').className = data.is_running ? 'text-xl font-bold text-green-500' : 'text-xl font-bold text-red-500';
+            
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = data.logs.map(log => `<div>${log}</div>`).join('');
+            logContainer.scrollTop = logContainer.scrollHeight;
+        };
+        
+        fetch('/api/status').then(r => r.json()).then(data => {
+            document.getElementById('mode-badge').innerText = data.mode.toUpperCase();
+            if(data.mode === 'testnet') document.getElementById('mode-badge').className = 'px-3 py-1 text-sm rounded-full bg-yellow-900 text-yellow-200';
+            if(data.mode === 'mainnet') document.getElementById('mode-badge').className = 'px-3 py-1 text-sm rounded-full bg-red-900 text-red-200';
+        });
+    </script>
+</body>
+</html>
